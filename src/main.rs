@@ -32,9 +32,7 @@ enum GameMode {
     GameOver,
 }
 
-struct Player {
-    x: f32,
-}
+struct Player { x: f32 }
 
 struct Obstacle {
     rect: Rect,
@@ -85,14 +83,14 @@ fn rects_overlap(a: Rect, b: Rect) -> bool {
     a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 }
 
-fn draw_text_center(text: &str, y: f32, size: f32, color: Color) {
-    let dim = measure_text(text, None, size as u16, 1.0);
+fn draw_text_center(font: &Font, text: &str, y: f32, size: f32, color: Color) {
+    let dim = measure_text(text, Some(font), size as u16, 1.0);
     let x = screen_width() * 0.5 - dim.width * 0.5;
     draw_text_ex(
         text,
         x,
         y,
-        TextParams { font_size: size as u16, color, ..Default::default() },
+        TextParams { font: Some(font), font_size: size as u16, color, ..Default::default() },
     );
 }
 
@@ -112,50 +110,41 @@ fn spawn_obstacle(game: &mut Game) {
     game.obstacles.push(Obstacle { rect, vy });
 }
 
-fn draw_hud(game: &Game) {
+fn draw_hud(font: &Font, game: &Game) {
     draw_rectangle(0.0, 0.0, screen_width(), 46.0, Color::from_rgba(20, 24, 32, 220));
 
     draw_text_ex(
         &format!("SCORE: {:>4}", game.score),
         16.0,
         30.0,
-        TextParams { font_size: 28, color: YELLOW, ..Default::default() },
+        TextParams { font: Some(font), font_size: 28, color: YELLOW, ..Default::default() },
     );
 
     draw_text_ex(
         &format!("BEST:  {:>4}", game.best_score),
         190.0,
         30.0,
-        TextParams { font_size: 28, color: GOLD, ..Default::default() },
+        TextParams { font: Some(font), font_size: 28, color: GOLD, ..Default::default() },
     );
 
     draw_text_ex(
         "[←/→]移动  [P]暂停  [R]重开  [ESC]菜单",
         screen_width() - 410.0,
         30.0,
-        TextParams { font_size: 22, color: LIGHTGRAY, ..Default::default() },
+        TextParams { font: Some(font), font_size: 22, color: LIGHTGRAY, ..Default::default() },
     );
-}
-
-fn draw_player(game: &Game) {
-    let r = Rect::new(game.player.x, PLAYER_Y, PLAYER_W, PLAYER_H);
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(90, 200, 255, 255));
-    draw_rectangle(r.x + 10.0, r.y + 4.0, r.w - 20.0, 3.0, Color::from_rgba(200, 245, 255, 255));
-}
-
-fn draw_obstacles(game: &Game) {
-    for o in &game.obstacles {
-        draw_rectangle(o.rect.x, o.rect.y, o.rect.w, o.rect.h, Color::from_rgba(255, 100, 100, 230));
-        draw_rectangle_lines(o.rect.x, o.rect.y, o.rect.w, o.rect.h, 2.0, Color::from_rgba(255, 180, 180, 240));
-    }
 }
 
 // ===== 主程序 =====
 #[macroquad::main(window_conf)]
 async fn main() {
+    // 加载中文字体（确保 assets/NotoSansCJKsc-Regular.otf 存在）
+    let font = load_ttf_font("assets/NotoSansCJKsc-Regular.otf")
+        .await
+        .expect("无法加载中文字体，请确认 assets/NotoSansCJKsc-Regular.otf 存在");
+
     let mut game = Game::new();
     let mut flash_time: f32 = 0.0;
-
     game.player.x = screen_width() * 0.5 - PLAYER_W * 0.5;
 
     loop {
@@ -164,11 +153,11 @@ async fn main() {
 
         match game.mode {
             GameMode::Menu => {
-                draw_text_center("Dodge Rush", 140.0, 62.0, SKYBLUE);
-                draw_text_center("左右移动躲避方块，活得越久分数越高", 200.0, 24.0, LIGHTGRAY);
-                draw_text_center("按 [SPACE] 开始， [H] 查看操作说明", 300.0, 28.0, WHITE);
+                draw_text_center(&font, "Dodge Rush", 140.0, 62.0, SKYBLUE);
+                draw_text_center(&font, "左右移动躲避方块，活得越久分数越高", 200.0, 24.0, LIGHTGRAY);
+                draw_text_center(&font, "按 [SPACE] 开始， [H] 查看操作说明", 300.0, 28.0, WHITE);
 
-                if is_key_pressed(KeyCode::H) { show_help_overlay().await; }
+                if is_key_pressed(KeyCode::H) { show_help_overlay(&font).await; }
                 if is_key_pressed(KeyCode::Space) { game.reset_round(); }
             }
             GameMode::Playing => {
@@ -210,17 +199,17 @@ async fn main() {
                 }
 
                 // 绘制
-                draw_hud(&game);
+                draw_hud(&font, &game);
                 draw_player(&game);
                 draw_obstacles(&game);
 
                 if is_key_pressed(KeyCode::P) { game.mode = GameMode::Paused; }
             }
             GameMode::Paused => {
-                draw_hud(&game);
+                draw_hud(&font, &game);
                 draw_player(&game);
                 draw_obstacles(&game);
-                draw_text_center("已暂停 [P]继续 / [R]重开 / [ESC]菜单", 300.0, 28.0, YELLOW);
+                draw_text_center(&font, "已暂停 [P]继续 / [R]重开 / [ESC]菜单", 300.0, 28.0, YELLOW);
                 if is_key_pressed(KeyCode::P) { game.mode = GameMode::Playing; }
                 if is_key_pressed(KeyCode::R) { game.reset_round(); }
                 if is_key_pressed(KeyCode::Escape) { game.mode = GameMode::Menu; }
@@ -232,12 +221,12 @@ async fn main() {
                     draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::from_rgba(255, 40, 40, alpha));
                 }
 
-                draw_hud(&game);
+                draw_hud(&font, &game);
                 draw_player(&game);
                 draw_obstacles(&game);
-                draw_text_center("💥 游戏结束!", 250.0, 44.0, RED);
-                draw_text_center(&format!("得分：{}   最高：{}", game.score, game.best_score), 300.0, 28.0, WHITE);
-                draw_text_center("[R] 再来一局   [ESC] 返回菜单", 350.0, 24.0, ORANGE);
+                draw_text_center(&font, "💥 游戏结束!", 250.0, 44.0, RED);
+                draw_text_center(&font, &format!("得分：{}   最高：{}", game.score, game.best_score), 300.0, 28.0, WHITE);
+                draw_text_center(&font, "[R] 再来一局   [ESC] 返回菜单", 350.0, 24.0, ORANGE);
 
                 if is_key_pressed(KeyCode::R) { game.reset_round(); }
                 if is_key_pressed(KeyCode::Escape) { game.mode = GameMode::Menu; }
@@ -248,16 +237,30 @@ async fn main() {
     }
 }
 
+// ===== 绘制元素 =====
+fn draw_player(game: &Game) {
+    let r = Rect::new(game.player.x, PLAYER_Y, PLAYER_W, PLAYER_H);
+    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(90, 200, 255, 255));
+    draw_rectangle(r.x + 10.0, r.y + 4.0, r.w - 20.0, 3.0, Color::from_rgba(200, 245, 255, 255));
+}
+
+fn draw_obstacles(game: &Game) {
+    for o in &game.obstacles {
+        draw_rectangle(o.rect.x, o.rect.y, o.rect.w, o.rect.h, Color::from_rgba(255, 100, 100, 230));
+        draw_rectangle_lines(o.rect.x, o.rect.y, o.rect.w, o.rect.h, 2.0, Color::from_rgba(255, 180, 180, 240));
+    }
+}
+
 // ===== 帮助页（异步） =====
-async fn show_help_overlay() {
+async fn show_help_overlay(font: &Font) {
     loop {
         clear_background(Color::from_rgba(14, 17, 22, 255));
-        draw_text_center("操作说明", 120.0, 48.0, WHITE);
-        draw_text_center("←/→ 或 A/D：左右移动", 200.0, 28.0, LIGHTGRAY);
-        draw_text_center("P：暂停 / 继续", 240.0, 28.0, LIGHTGRAY);
-        draw_text_center("R：重新开始", 280.0, 28.0, LIGHTGRAY);
-        draw_text_center("ESC：返回菜单", 320.0, 28.0, LIGHTGRAY);
-        draw_text_center("按 [ESC] 返回", 420.0, 24.0, YELLOW);
+        draw_text_center(font, "操作说明", 120.0, 48.0, WHITE);
+        draw_text_center(font, "←/→ 或 A/D：左右移动", 200.0, 28.0, LIGHTGRAY);
+        draw_text_center(font, "P：暂停 / 继续", 240.0, 28.0, LIGHTGRAY);
+        draw_text_center(font, "R：重新开始", 280.0, 28.0, LIGHTGRAY);
+        draw_text_center(font, "ESC：返回菜单", 320.0, 28.0, LIGHTGRAY);
+        draw_text_center(font, "按 [ESC] 返回", 420.0, 24.0, YELLOW);
         if is_key_pressed(KeyCode::Escape) { break; }
         next_frame().await;
     }
